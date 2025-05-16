@@ -1,5 +1,5 @@
 import PortfolioChart from "@/components/charts/PortfolioChart";
-import StartButton from "@/components/StartButton";
+import StartButton from "@/components/ui/StartButton";
 
 export default function Home() {
   return (
