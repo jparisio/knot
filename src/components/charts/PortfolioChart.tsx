@@ -38,7 +38,7 @@ export default function PortfolioChart({ data, labels }: PortfolioChartProps) {
           data: data ?? [10000, 10100, 10050, 10200, 10400],
           borderColor: "#10B981", // Tailwind emerald-500
           backgroundColor: "rgba(16, 185, 129, 0.1)",
-          fill: true,
+          // fill: true,
           tension: 0.3,
         },
       ],

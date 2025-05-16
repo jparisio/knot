@@ -27,7 +27,7 @@ const data = {
       data: [3700, 5000, 4500, 6000, 5200, 6500],
       borderColor: "rgba(34,197,94,1)",
       backgroundColor: "rgba(34,197,94,0.2)",
-      fill: true,
+      // fill: true,
       tension: 0.3,
     },
   ],
