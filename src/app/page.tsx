@@ -1,5 +1,5 @@
 import PortfolioChart from "@/components/charts/PortfolioChart";
-import StartButton from "@/components/ui/StartButton";
+import RouteButton from "@/components/ui/RouteButton";
 
 export default function Home() {
   return (
@@ -16,7 +16,7 @@ export default function Home() {
         <PortfolioChart />
       </div>
       <div>
-        <StartButton />
+        <RouteButton route={"dashboard"} />
       </div>
     </main>
   );
