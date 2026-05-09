@@ -125,13 +125,14 @@ export function TickChart({ ticks }: Props) {
     chart.update('none');
   }, [ticks]);
 
-  if (ticks.length === 0) {
-    return (
-      <div className="flex items-center justify-center h-full text-slate-700 text-xs font-mono tracking-widest">
-        AWAITING FEED
-      </div>
-    );
-  }
-
-  return <canvas ref={canvasRef} className="w-full h-full" />;
+  return (
+    <div className="relative w-full h-full">
+      {ticks.length === 0 && (
+        <div className="absolute inset-0 flex items-center justify-center text-slate-700 text-xs font-mono tracking-widest">
+          AWAITING FEED
+        </div>
+      )}
+      <canvas ref={canvasRef} className="w-full h-full" />
+    </div>
+  );
 }

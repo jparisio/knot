@@ -1,7 +1,7 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useSocketContext } from '@/lib/SocketContext';
 import { useTicks } from '@/hooks/useTicks';
 import { usePortfolio } from '@/hooks/usePortfolio';
@@ -199,29 +199,91 @@ function MarketView({
 
 // ─── Add-symbol form ─────────────────────────────────────────────────────────
 
+interface SearchResult { symbol: string; description: string; }
+
 function AddSymbolForm({ onAdd }: { onAdd: (symbol: string) => void }) {
   const [input, setInput] = useState('');
+  const [results, setResults] = useState<SearchResult[]>([]);
+  const [open, setOpen] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  const search = useCallback((q: string) => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (!q) { setResults([]); setOpen(false); return; }
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+        const data: SearchResult[] = await res.json();
+        setResults(data);
+        setOpen(data.length > 0);
+      } catch { setResults([]); }
+    }, 300);
+  }, []);
+
+  const pick = (symbol: string) => {
+    onAdd(symbol);
+    setInput('');
+    setResults([]);
+    setOpen(false);
+  };
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const sym = input.trim().toUpperCase();
-    if (sym) { onAdd(sym); setInput(''); }
+    if (sym) pick(sym);
   };
+
   return (
-    <form onSubmit={handleSubmit} className="flex gap-1.5">
-      <input
-        value={input}
-        onChange={(e) => setInput(e.target.value.toUpperCase())}
-        placeholder="SYMBOL"
-        maxLength={10}
-        className="bg-slate-900/60 border border-slate-800 rounded px-3 py-1 text-xs font-mono text-slate-200 placeholder:text-slate-700 focus:outline-none focus:border-emerald-800 w-24"
-      />
-      <button
-        type="submit"
-        className="text-xs font-mono text-emerald-700 hover:text-emerald-400 border border-slate-800 hover:border-emerald-900 rounded px-2 py-1 transition-colors"
-      >
-        + ADD
-      </button>
-    </form>
+    <div ref={wrapperRef} className="relative">
+      <form onSubmit={handleSubmit} className="flex gap-1.5">
+        <input
+          value={input}
+          onChange={(e) => {
+            const v = e.target.value.toUpperCase();
+            setInput(v);
+            search(v);
+          }}
+          onFocus={() => results.length > 0 && setOpen(true)}
+          placeholder="SYMBOL"
+          maxLength={12}
+          className="bg-slate-900/60 border border-slate-800 rounded px-3 py-1 text-xs font-mono text-slate-200 placeholder:text-slate-700 focus:outline-none focus:border-emerald-800 w-28"
+        />
+        <button
+          type="submit"
+          className="text-xs font-mono text-emerald-700 hover:text-emerald-400 border border-slate-800 hover:border-emerald-900 rounded px-2 py-1 transition-colors"
+        >
+          + ADD
+        </button>
+      </form>
+
+      {open && (
+        <div className="absolute right-0 top-full mt-1 w-64 bg-[#0d0f18] border border-slate-800 rounded shadow-xl z-50">
+          {results.map((r) => (
+            <button
+              key={r.symbol}
+              type="button"
+              onMouseDown={() => pick(r.symbol)}
+              className="w-full text-left px-3 py-2 flex gap-3 items-baseline hover:bg-slate-800/60 transition-colors"
+            >
+              <span className="font-mono text-xs text-white font-semibold w-20 shrink-0">{r.symbol}</span>
+              <span className="font-mono text-[10px] text-slate-500 truncate">{r.description}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
