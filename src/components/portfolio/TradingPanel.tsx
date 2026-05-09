@@ -22,7 +22,6 @@ export function TradingPanel({ symbol, portfolio }: Props) {
   const shares = Math.floor(parseFloat(sharesInput) || 0);
   const totalCost = shares * price;
 
-  // Preview how the buy would be split — only meaningful in AUTO mode
   const autoTfsaShares = price > 0 ? Math.min(shares, Math.floor(portfolio.tfsaRemaining / price)) : 0;
   const autoNonRegShares = shares - autoTfsaShares;
 
@@ -52,40 +51,46 @@ export function TradingPanel({ symbol, portfolio }: Props) {
   };
 
   return (
-    <div className="border-t border-slate-800/40 px-6 py-4 flex-shrink-0 bg-[#080a10]">
-      {/* Side tabs */}
-      <div className="flex items-center gap-2 mb-3">
+    <div className="flex flex-col h-full px-5 py-6 gap-5">
+      <p className="text-[11px] text-white/30 uppercase tracking-wider font-medium">Order</p>
+
+      {/* BUY / SELL toggle */}
+      <div className="flex bg-white/[0.06] rounded-xl p-1">
         {(['BUY', 'SELL'] as const).map((s) => (
           <button
             key={s}
             onClick={() => { setSide(s); setMessage(null); }}
-            className={`text-xs font-mono px-3 py-1 rounded border transition-colors ${
+            className={`flex-1 py-2 rounded-lg text-[13px] font-semibold transition-all duration-150 ${
               side === s
                 ? s === 'BUY'
-                  ? 'bg-emerald-950/60 text-emerald-400 border-emerald-800'
-                  : 'bg-red-950/40 text-red-400 border-red-900'
-                : 'text-slate-600 border-slate-800 hover:text-slate-400'
+                  ? 'bg-[#00d07e] text-black shadow-sm'
+                  : 'bg-[#ff453a] text-white shadow-sm'
+                : 'text-white/35 hover:text-white/60'
             }`}
           >
-            {s}
+            {s === 'BUY' ? 'Buy' : 'Sell'}
           </button>
         ))}
-        {side === 'BUY' && (
+      </div>
+
+      {/* Account selector */}
+      <div>
+        <p className="text-[11px] text-white/30 uppercase tracking-wider mb-2">Account</p>
+        {side === 'BUY' ? (
           <select
             value={buyAccount}
             onChange={(e) => setBuyAccount(e.target.value as 'AUTO' | AccountType)}
-            className="ml-1 text-xs font-mono bg-slate-900 border border-slate-800 rounded px-2 py-1 text-slate-400 focus:outline-none"
+            className="w-full bg-white/[0.06] border border-white/[0.08] rounded-lg px-3 py-2.5 text-[13px] text-white/80 focus:outline-none focus:border-white/20 transition-colors cursor-pointer"
           >
             <option value="AUTO">Auto (TFSA-first)</option>
             <option value="TFSA">TFSA only</option>
             <option value="NON_REG">Non-Registered</option>
           </select>
-        )}
-        {side === 'SELL' && (
+        ) : (
           <select
             value={sellAccount}
             onChange={(e) => setSellAccount(e.target.value as AccountType)}
-            className="ml-1 text-xs font-mono bg-slate-900 border border-slate-800 rounded px-2 py-1 text-slate-400 focus:outline-none"
+            className="w-full bg-white/[0.06] border border-white/[0.08] rounded-lg px-3 py-2.5 text-[13px] text-white/80 focus:outline-none focus:border-white/20 transition-colors cursor-pointer"
           >
             <option value="TFSA">TFSA</option>
             <option value="NON_REG">Non-Registered</option>
@@ -93,72 +98,73 @@ export function TradingPanel({ symbol, portfolio }: Props) {
         )}
       </div>
 
-      <div className="flex items-end gap-4 flex-wrap">
-        {/* Shares input */}
-        <div>
-          <p className="text-[10px] text-slate-600 font-mono mb-1 tracking-widest">SHARES</p>
-          <input
-            type="number"
-            value={sharesInput}
-            onChange={(e) => setSharesInput(e.target.value)}
-            min="1"
-            step="1"
-            placeholder="0"
-            className="w-20 bg-slate-900 border border-slate-800 rounded px-2 py-1.5 text-xs font-mono text-slate-200 focus:outline-none focus:border-emerald-800"
-          />
-        </div>
-
-        {/* Price */}
-        <div>
-          <p className="text-[10px] text-slate-600 font-mono mb-1 tracking-widest">MKT PRICE</p>
-          <p className="text-xs font-mono text-slate-400 py-1.5">
-            {price ? `$${price.toFixed(2)}` : '—'}
-          </p>
-        </div>
-
-        {/* Total cost */}
-        <div>
-          <p className="text-[10px] text-slate-600 font-mono mb-1 tracking-widest">TOTAL</p>
-          <p className="text-xs font-mono text-slate-300 py-1.5 tabular-nums">
-            {totalCost > 0 ? `$${totalCost.toFixed(2)}` : '—'}
-          </p>
-        </div>
-
-        {/* Allocation preview (buy only, AUTO mode) */}
-        {side === 'BUY' && buyAccount === 'AUTO' && shares > 0 && price > 0 && (
-          <div>
-            <p className="text-[10px] text-slate-600 font-mono mb-1 tracking-widest">ALLOCATION</p>
-            <p className="text-xs font-mono py-1.5 text-slate-400 tabular-nums">
-              {autoTfsaShares > 0 && (
-                <span className="text-emerald-600">{autoTfsaShares} TFSA</span>
-              )}
-              {autoTfsaShares > 0 && autoNonRegShares > 0 && (
-                <span className="text-slate-600"> + </span>
-              )}
-              {autoNonRegShares > 0 && (
-                <span className="text-sky-600">{autoNonRegShares} Non-Reg</span>
-              )}
-            </p>
-          </div>
-        )}
-
-        {/* Execute button */}
-        <button
-          onClick={handleTrade}
-          disabled={!shares || !price}
-          className={`px-5 py-1.5 rounded text-xs font-mono font-semibold border transition-colors ${
-            side === 'BUY'
-              ? 'bg-emerald-950/60 text-emerald-300 border-emerald-800 hover:bg-emerald-900/60'
-              : 'bg-red-950/40 text-red-300 border-red-900 hover:bg-red-900/40'
-          } disabled:opacity-25 disabled:cursor-not-allowed`}
-        >
-          {side === 'BUY' ? 'PLACE BUY' : 'PLACE SELL'}
-        </button>
+      {/* Shares input */}
+      <div>
+        <p className="text-[11px] text-white/30 uppercase tracking-wider mb-2">Shares</p>
+        <input
+          type="number"
+          value={sharesInput}
+          onChange={(e) => setSharesInput(e.target.value)}
+          min="1"
+          step="1"
+          placeholder="0"
+          className="w-full bg-white/[0.06] border border-white/[0.08] rounded-lg px-3 py-2.5 text-[13px] text-white focus:outline-none focus:border-white/20 tabular-nums transition-colors"
+        />
       </div>
 
-      {/* Result */}
+      {/* Order summary */}
+      {price > 0 && (
+        <div className="bg-white/[0.04] rounded-xl px-4 py-3.5 space-y-2.5">
+          <div className="flex justify-between">
+            <span className="text-[13px] text-white/40">Market price</span>
+            <span className="text-[13px] text-white/60 tabular-nums">${price.toFixed(2)}</span>
+          </div>
+          {shares > 0 && (
+            <div className="flex justify-between">
+              <span className="text-[13px] text-white/40">Est. total</span>
+              <span className="text-[13px] text-white font-medium tabular-nums">${totalCost.toFixed(2)}</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Auto-allocation preview */}
+      {side === 'BUY' && buyAccount === 'AUTO' && shares > 0 && price > 0 && (
+        <div className="bg-white/[0.03] rounded-xl px-4 py-3 space-y-2">
+          <p className="text-[11px] text-white/25 uppercase tracking-wider mb-1">Allocation</p>
+          {autoTfsaShares > 0 && (
+            <div className="flex justify-between text-[12px]">
+              <span className="text-white/40">TFSA</span>
+              <span className="text-[#00d07e] tabular-nums">{autoTfsaShares} shares</span>
+            </div>
+          )}
+          {autoNonRegShares > 0 && (
+            <div className="flex justify-between text-[12px]">
+              <span className="text-white/40">Non-Reg</span>
+              <span className="text-sky-400 tabular-nums">{autoNonRegShares} shares</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Execute button */}
+      <button
+        onClick={handleTrade}
+        disabled={!shares || !price}
+        className={`w-full py-3.5 rounded-xl text-[14px] font-semibold transition-all mt-auto ${
+          side === 'BUY'
+            ? 'bg-[#00d07e] text-black hover:opacity-90 active:opacity-80'
+            : 'bg-[#ff453a] text-white hover:opacity-90 active:opacity-80'
+        } disabled:opacity-15 disabled:cursor-not-allowed`}
+      >
+        {side === 'BUY'
+          ? shares > 0 ? `Buy ${shares} share${shares !== 1 ? 's' : ''}` : `Buy ${symbol}`
+          : shares > 0 ? `Sell ${shares} share${shares !== 1 ? 's' : ''}` : `Sell ${symbol}`}
+      </button>
+
+      {/* Result message */}
       {message && (
-        <p className={`mt-2 text-xs font-mono ${message.ok ? 'text-emerald-500' : 'text-red-400'}`}>
+        <p className={`text-[12px] leading-relaxed ${message.ok ? 'text-[#00d07e]' : 'text-[#ff453a]'}`}>
           {message.text}
         </p>
       )}

@@ -5,7 +5,6 @@ import { useTicks } from '@/hooks/useTicks';
 import type { usePortfolio } from '@/hooks/usePortfolio';
 import type { Holding, AccountType } from '@/types/portfolio';
 
-// TFSA annual contribution limits by year (CRA official)
 const ANNUAL_LIMITS: Record<number, number> = {
   2009: 5000, 2010: 5000, 2011: 5000, 2012: 5000,
   2013: 5500, 2014: 5500, 2015: 10000,
@@ -25,14 +24,7 @@ function calcLifetimeRoom(birthYear: number): number {
   return total;
 }
 
-// Each holding row subscribes to live prices independently via useTicks
-function HoldingRow({
-  holding,
-  account,
-}: {
-  holding: Holding;
-  account: AccountType;
-}) {
+function HoldingRow({ holding, account }: { holding: Holding; account: AccountType }) {
   const { latestPrice } = useTicks(holding.symbol);
   const price = latestPrice ?? holding.avgCost;
   const value = price * holding.shares;
@@ -41,22 +33,29 @@ function HoldingRow({
   const isUp = pnl >= 0;
 
   return (
-    <tr className="border-t border-slate-800/40">
-      <td className="py-2 pr-4 font-mono text-xs text-white font-semibold">
-        {holding.symbol}
-        <span className="ml-1.5 text-[9px] text-slate-600">{account}</span>
+    <tr className="border-t border-white/[0.05]">
+      <td className="px-4 py-3">
+        <span className="text-[13px] text-white font-semibold">{holding.symbol}</span>
+        <span className={`ml-2 text-[10px] px-1.5 py-0.5 rounded-md font-medium ${
+          account === 'TFSA' ? 'bg-[#00d07e]/10 text-[#00d07e]' : 'bg-sky-500/10 text-sky-400'
+        }`}>
+          {account === 'TFSA' ? 'TFSA' : 'Non-Reg'}
+        </span>
       </td>
-      <td className="py-2 pr-4 font-mono text-xs text-slate-400 tabular-nums">{holding.shares}</td>
-      <td className="py-2 pr-4 font-mono text-xs text-slate-500 tabular-nums">${holding.avgCost.toFixed(2)}</td>
-      <td className="py-2 pr-4 font-mono text-xs text-slate-300 tabular-nums">${price.toFixed(2)}</td>
-      <td className="py-2 pr-4 font-mono text-xs text-slate-300 tabular-nums">${value.toFixed(2)}</td>
-      <td className={`py-2 font-mono text-xs tabular-nums ${isUp ? 'text-emerald-500' : 'text-red-500'}`}>
-        {isUp ? '+' : ''}${pnl.toFixed(2)}&nbsp;
-        <span className="text-[10px]">({isUp ? '+' : ''}{pnlPct.toFixed(2)}%)</span>
+      <td className="px-4 py-3 text-[13px] text-white/50 tabular-nums">{holding.shares}</td>
+      <td className="px-4 py-3 text-[13px] text-white/40 tabular-nums">${holding.avgCost.toFixed(2)}</td>
+      <td className="px-4 py-3 text-[13px] text-white/70 tabular-nums">${price.toFixed(2)}</td>
+      <td className="px-4 py-3 text-[13px] text-white tabular-nums">${value.toFixed(2)}</td>
+      <td className={`px-4 py-3 text-[13px] tabular-nums ${isUp ? 'text-[#00d07e]' : 'text-[#ff453a]'}`}>
+        {isUp ? '+' : ''}${pnl.toFixed(2)}
+        <span className="text-[11px] ml-1 opacity-70">({isUp ? '+' : ''}{pnlPct.toFixed(2)}%)</span>
       </td>
     </tr>
   );
 }
+
+const inputCls = 'w-full bg-white/[0.06] border border-white/[0.08] rounded-lg px-3 py-2.5 text-[13px] text-white focus:outline-none focus:border-white/20 transition-colors';
+const labelCls = 'text-[11px] text-white/30 uppercase tracking-wider font-medium mb-2';
 
 interface Props {
   portfolio: ReturnType<typeof usePortfolio>;
@@ -71,72 +70,106 @@ export function PortfolioView({ portfolio }: Props) {
   const { totalRoom, contributed, overflowEnabled } = state.tfsaConfig;
 
   const barPct = Math.min(tfsaUsedPct, 100);
-  const barColor =
-    tfsaUsedPct >= 100 ? 'bg-red-500' : tfsaUsedPct >= 85 ? 'bg-amber-500' : 'bg-emerald-500';
+  const barColor = tfsaUsedPct >= 100 ? 'bg-[#ff453a]' : tfsaUsedPct >= 85 ? 'bg-amber-400' : 'bg-[#00d07e]';
 
   const recentTrades = [...state.trades].reverse().slice(0, 15);
 
-  return (
-    <div className="h-full overflow-y-auto px-6 py-5 flex flex-col gap-6">
-      {/* ── TFSA Status ─────────────────────────────────── */}
-      <section>
-        <h2 className="text-[10px] font-mono tracking-widest text-slate-600 mb-3">TFSA ACCOUNT</h2>
+  const allHoldings = [
+    ...state.tfsa.holdings.map(h => ({ ...h, account: 'TFSA' as AccountType })),
+    ...state.nonReg.holdings.map(h => ({ ...h, account: 'NON_REG' as AccountType })),
+  ];
 
-        {/* Progress bar */}
-        <div className="mb-2">
-          <div className="flex justify-between text-[10px] font-mono text-slate-600 mb-1">
-            <span>${contributed.toLocaleString()} contributed</span>
-            <span>${tfsaRemaining.toLocaleString()} remaining of ${totalRoom.toLocaleString()}</span>
+  return (
+    <div className="h-full overflow-y-auto px-8 py-6 flex flex-col gap-8">
+
+      {/* ── Account Overview ───────────────────────────────── */}
+      <section>
+        <h2 className={labelCls}>Account Overview</h2>
+
+        {/* Cash balances */}
+        <div className="flex gap-3 mb-5">
+          <div className="flex-1 bg-white/[0.04] border border-white/[0.06] rounded-xl px-4 py-3.5">
+            <p className="text-[11px] text-white/30 uppercase tracking-wider mb-1.5">TFSA Cash</p>
+            <p className="text-[20px] font-semibold text-[#00d07e] tabular-nums">${state.tfsa.cashBalance.toFixed(2)}</p>
           </div>
-          <div className="h-1.5 rounded-full bg-slate-800 overflow-hidden">
+          <div className="flex-1 bg-white/[0.04] border border-white/[0.06] rounded-xl px-4 py-3.5">
+            <p className="text-[11px] text-white/30 uppercase tracking-wider mb-1.5">Non-Reg Cash</p>
+            <p className="text-[20px] font-semibold text-sky-400 tabular-nums">${state.nonReg.cashBalance.toFixed(2)}</p>
+          </div>
+        </div>
+
+        {/* TFSA progress */}
+        <div className="bg-white/[0.04] border border-white/[0.06] rounded-xl px-4 py-4">
+          <div className="flex justify-between text-[12px] text-white/40 mb-3">
+            <span>${contributed.toLocaleString()} contributed</span>
+            <span>${tfsaRemaining.toLocaleString()} of ${totalRoom.toLocaleString()} remaining</span>
+          </div>
+          <div className="h-1.5 rounded-full bg-white/[0.08] overflow-hidden">
             <div
               className={`h-full rounded-full transition-all duration-500 ${barColor}`}
               style={{ width: `${barPct}%` }}
             />
           </div>
-        </div>
 
-        {/* Overflow warning */}
-        {tfsaUsedPct >= 85 && (
-          <div className={`text-xs font-mono mt-2 px-3 py-2 rounded border ${
-            tfsaUsedPct >= 100
-              ? 'border-red-900 bg-red-950/30 text-red-400'
-              : 'border-amber-900 bg-amber-950/30 text-amber-400'
-          }`}>
-            {tfsaUsedPct >= 100
-              ? '⚠ TFSA contribution room exhausted. New trades route to Non-Registered.'
-              : `⚠ ${(100 - tfsaUsedPct).toFixed(1)}% of TFSA room remaining ($${tfsaRemaining.toLocaleString()}).`}
-          </div>
-        )}
-
-        {/* Cash balances */}
-        <div className="flex gap-4 mt-3">
-          <div className="bg-slate-900/40 border border-slate-800/40 rounded px-3 py-2">
-            <p className="text-[10px] text-slate-600 font-mono tracking-widest">TFSA CASH</p>
-            <p className="text-sm font-mono text-emerald-400 tabular-nums">${state.tfsa.cashBalance.toFixed(2)}</p>
-          </div>
-          <div className="bg-slate-900/40 border border-slate-800/40 rounded px-3 py-2">
-            <p className="text-[10px] text-slate-600 font-mono tracking-widest">NON-REG CASH</p>
-            <p className="text-sm font-mono text-sky-400 tabular-nums">${state.nonReg.cashBalance.toFixed(2)}</p>
-          </div>
+          {tfsaUsedPct >= 85 && (
+            <div className={`mt-3 text-[12px] px-3.5 py-2.5 rounded-lg flex items-start gap-2 ${
+              tfsaUsedPct >= 100
+                ? 'bg-[#ff453a]/10 text-[#ff453a]'
+                : 'bg-amber-400/10 text-amber-400'
+            }`}>
+              <span className="text-[14px] leading-none mt-0.5">⚠</span>
+              <span>
+                {tfsaUsedPct >= 100
+                  ? 'TFSA contribution room exhausted. New trades route to Non-Registered.'
+                  : `${(100 - tfsaUsedPct).toFixed(1)}% of TFSA room remaining ($${tfsaRemaining.toLocaleString()}).`}
+              </span>
+            </div>
+          )}
         </div>
       </section>
 
-      {/* ── TFSA Settings ───────────────────────────────── */}
+      {/* ── Holdings ─────────────────────────────────────────── */}
       <section>
-        <h2 className="text-[10px] font-mono tracking-widest text-slate-600 mb-3">TFSA SETTINGS</h2>
+        <h2 className={labelCls}>Holdings</h2>
+        {allHoldings.length === 0 ? (
+          <p className="text-[13px] text-white/20 py-2">No open positions.</p>
+        ) : (
+          <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl overflow-hidden">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-white/[0.06]">
+                  {['Symbol', 'Shares', 'Avg Cost', 'Price', 'Value', 'Unrealized P&L'].map((h) => (
+                    <th key={h} className="px-4 py-3 text-left text-[11px] text-white/25 uppercase tracking-wider font-medium">
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {allHoldings.map((h) => (
+                  <HoldingRow key={`${h.symbol}-${h.account}`} holding={h} account={h.account} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
 
-        <div className="flex flex-col gap-3">
-          {/* Manual room entry */}
+      {/* ── TFSA Settings ───────────────────────────────────── */}
+      <section>
+        <h2 className={labelCls}>TFSA Settings</h2>
+        <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl px-5 py-5 flex flex-col gap-5">
+
+          {/* Manual room */}
           <div className="flex items-end gap-3">
-            <div>
-              <p className="text-[10px] text-slate-600 font-mono mb-1">CRA CONTRIBUTION ROOM ($)</p>
+            <div className="flex-1">
+              <p className={labelCls}>CRA Contribution Room ($)</p>
               <input
                 type="number"
                 value={roomInput}
                 onChange={(e) => setRoomInput(e.target.value)}
                 placeholder={totalRoom.toString()}
-                className="w-32 bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs font-mono text-slate-200 focus:outline-none focus:border-emerald-800"
+                className={inputCls}
               />
             </div>
             <button
@@ -144,151 +177,107 @@ export function PortfolioView({ portfolio }: Props) {
                 const n = parseFloat(roomInput);
                 if (n > 0) { updateTFSAConfig({ totalRoom: n }); setRoomInput(''); }
               }}
-              className="px-3 py-1 text-xs font-mono text-emerald-700 border border-emerald-900 rounded hover:text-emerald-400 hover:border-emerald-700 transition-colors"
+              className="px-4 py-2.5 text-[13px] font-medium bg-white/[0.07] hover:bg-white/[0.12] text-white/70 hover:text-white rounded-lg transition-all"
             >
-              UPDATE
+              Update
             </button>
           </div>
 
-          {/* Auto-calculate from birth year */}
+          {/* Birth year calculator */}
           <div className="flex items-end gap-3">
-            <div>
-              <p className="text-[10px] text-slate-600 font-mono mb-1">OR CALCULATE FROM BIRTH YEAR</p>
+            <div className="flex-1">
+              <p className={labelCls}>Or Calculate from Birth Year</p>
               <input
                 type="number"
                 value={birthYearInput}
                 onChange={(e) => setBirthYearInput(e.target.value)}
                 placeholder="e.g. 1998"
-                className="w-32 bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs font-mono text-slate-200 focus:outline-none focus:border-emerald-800"
+                className={inputCls}
               />
             </div>
             <button
               onClick={() => {
                 const y = parseInt(birthYearInput);
                 if (y > 1900 && y < 2010) {
-                  const room = calcLifetimeRoom(y);
-                  updateTFSAConfig({ totalRoom: room });
+                  updateTFSAConfig({ totalRoom: calcLifetimeRoom(y) });
                   setCalcBirthYear(y);
                   setBirthYearInput('');
                 }
               }}
-              className="px-3 py-1 text-xs font-mono text-slate-500 border border-slate-800 rounded hover:text-slate-300 hover:border-slate-600 transition-colors"
+              className="px-4 py-2.5 text-[13px] font-medium bg-white/[0.07] hover:bg-white/[0.12] text-white/60 hover:text-white rounded-lg transition-all"
             >
-              CALC
+              Calculate
             </button>
           </div>
           {calcBirthYear !== null && (
-            <p className="text-[10px] font-mono text-slate-600">
-              Displaying for born <span className="text-slate-400">{calcBirthYear}</span>
-              {' · '}lifetime room accrued through {new Date().getFullYear()}
+            <p className="text-[12px] text-white/30 -mt-2">
+              Lifetime room accrued through {new Date().getFullYear()} for birth year{' '}
+              <span className="text-white/50">{calcBirthYear}</span>
             </p>
           )}
 
           {/* Overflow toggle */}
-          <label className="flex items-center gap-3 cursor-pointer mt-1">
-            <div
+          <div className="flex items-center justify-between pt-1">
+            <div>
+              <p className="text-[13px] text-white/70">Auto-invest overflow to Non-Registered</p>
+              {!overflowEnabled && (
+                <p className="text-[12px] text-white/25 mt-0.5">
+                  Trades exceeding TFSA room will be rejected.
+                </p>
+              )}
+            </div>
+            <button
               onClick={() => updateTFSAConfig({ overflowEnabled: !overflowEnabled })}
-              className={`w-8 h-4 rounded-full transition-colors relative cursor-pointer ${
-                overflowEnabled ? 'bg-emerald-700' : 'bg-slate-700'
+              className={`w-10 h-6 rounded-full transition-colors relative flex-shrink-0 ${
+                overflowEnabled ? 'bg-[#00d07e]' : 'bg-white/15'
               }`}
+              role="switch"
+              aria-checked={overflowEnabled}
             >
               <span
-                className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform ${
-                  overflowEnabled ? 'translate-x-4' : 'translate-x-0.5'
+                className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-all duration-200 ${
+                  overflowEnabled ? 'left-[18px]' : 'left-0.5'
                 }`}
               />
-            </div>
-            <span className="text-xs font-mono text-slate-400">
-              Auto-invest overflow to Non-Registered
-            </span>
-          </label>
+            </button>
+          </div>
 
-          {!overflowEnabled && (
-            <p className="text-[10px] font-mono text-slate-600">
-              Trades exceeding TFSA room will be rejected. Enable to auto-route excess to Non-Registered.
-            </p>
-          )}
-
-          <p className="text-[10px] font-mono text-slate-700">
-            Note: TFSA withdrawals restore contribution room in the following January (CRA rule).
-            Update your room manually each year from CRA My Account.
+          <p className="text-[11px] text-white/20">
+            TFSA withdrawals restore contribution room in the following January (CRA rule).
+            Update your room manually each year via CRA My Account.
           </p>
         </div>
       </section>
 
-      {/* ── TFSA Holdings ───────────────────────────────── */}
+      {/* ── Trade History ─────────────────────────────────── */}
       <section>
-        <h2 className="text-[10px] font-mono tracking-widest text-slate-600 mb-3">TFSA HOLDINGS</h2>
-        {state.tfsa.holdings.length === 0 ? (
-          <p className="text-xs font-mono text-slate-700">No TFSA positions.</p>
-        ) : (
-          <table className="w-full">
-            <thead>
-              <tr>
-                {['SYMBOL', 'SHARES', 'AVG COST', 'PRICE', 'VALUE', 'UNREALIZED P&L'].map((h) => (
-                  <th key={h} className="pb-2 pr-4 text-left text-[9px] font-mono text-slate-700 tracking-widest">
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {state.tfsa.holdings.map((h) => (
-                <HoldingRow key={h.symbol} holding={h} account="TFSA" />
-              ))}
-            </tbody>
-          </table>
-        )}
-      </section>
-
-      {/* ── Non-Registered Holdings ──────────────────────── */}
-      <section>
-        <h2 className="text-[10px] font-mono tracking-widest text-slate-600 mb-3">NON-REGISTERED HOLDINGS</h2>
-        {state.nonReg.holdings.length === 0 ? (
-          <p className="text-xs font-mono text-slate-700">No Non-Registered positions.</p>
-        ) : (
-          <table className="w-full">
-            <thead>
-              <tr>
-                {['SYMBOL', 'SHARES', 'AVG COST', 'PRICE', 'VALUE', 'UNREALIZED P&L'].map((h) => (
-                  <th key={h} className="pb-2 pr-4 text-left text-[9px] font-mono text-slate-700 tracking-widest">
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {state.nonReg.holdings.map((h) => (
-                <HoldingRow key={h.symbol} holding={h} account="NON_REG" />
-              ))}
-            </tbody>
-          </table>
-        )}
-      </section>
-
-      {/* ── Trade History ────────────────────────────────── */}
-      <section>
-        <div className="flex justify-between items-center mb-3">
-          <h2 className="text-[10px] font-mono tracking-widest text-slate-600">TRADE HISTORY</h2>
+        <div className="flex justify-between items-center mb-4">
+          <h2 className={labelCls}>Trade History</h2>
           <button
             onClick={() => { if (window.confirm('Reset all portfolio data?')) reset(); }}
-            className="text-[10px] font-mono text-slate-700 hover:text-red-500 transition-colors"
+            className="text-[12px] text-white/25 hover:text-[#ff453a] transition-colors"
           >
-            RESET
+            Reset
           </button>
         </div>
 
         {recentTrades.length === 0 ? (
-          <p className="text-xs font-mono text-slate-700">No trades yet.</p>
+          <p className="text-[13px] text-white/20">No trades yet.</p>
         ) : (
-          <div className="flex flex-col gap-1">
+          <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl overflow-hidden divide-y divide-white/[0.05]">
             {recentTrades.map((t) => (
-              <div key={t.id} className="flex items-center gap-4 text-xs font-mono text-slate-500 tabular-nums">
-                <span className={t.type === 'BUY' ? 'text-emerald-700' : 'text-red-700'}>{t.type}</span>
-                <span className="text-slate-300">{t.symbol}</span>
-                <span>{t.shares} @ ${t.price.toFixed(2)}</span>
-                <span className={t.account === 'TFSA' ? 'text-emerald-800' : 'text-sky-800'}>{t.account}</span>
-                <span className="ml-auto text-slate-700">
+              <div key={t.id} className="flex items-center gap-4 px-4 py-3">
+                <span className={`text-[13px] font-semibold w-8 ${t.type === 'BUY' ? 'text-[#00d07e]' : 'text-[#ff453a]'}`}>
+                  {t.type === 'BUY' ? 'Buy' : 'Sell'}
+                </span>
+                <span className="text-[13px] text-white font-medium">{t.symbol}</span>
+                <span className="text-[13px] text-white/40 tabular-nums">{t.shares} @ ${t.price.toFixed(2)}</span>
+                <span className={`text-[11px] px-1.5 py-0.5 rounded-md font-medium ${
+                  t.account === 'TFSA' ? 'bg-[#00d07e]/10 text-[#00d07e]' : 'bg-sky-500/10 text-sky-400'
+                }`}>
+                  {t.account === 'TFSA' ? 'TFSA' : 'Non-Reg'}
+                </span>
+                <span className="ml-auto text-[12px] text-white/20 tabular-nums">
                   {new Date(t.timestamp).toLocaleTimeString()}
                 </span>
               </div>

@@ -15,13 +15,13 @@ import type { Tick } from '@/types/tick';
 
 ChartJS.register(LineController, CategoryScale, LinearScale, PointElement, LineElement, Filler, Tooltip);
 
-ChartJS.defaults.color = '#475569';
-ChartJS.defaults.borderColor = '#1e2130';
+ChartJS.defaults.color = 'rgba(255,255,255,0.25)';
+ChartJS.defaults.borderColor = 'rgba(255,255,255,0.04)';
 
-const UP_STROKE = '#10b981';
-const DOWN_STROKE = '#ef4444';
-const UP_FILL = 'rgba(16,185,129,0.06)';
-const DOWN_FILL = 'rgba(239,68,68,0.06)';
+const UP_STROKE = '#00d07e';
+const DOWN_STROKE = '#ff453a';
+const UP_FILL = 'rgba(0, 208, 126, 0.07)';
+const DOWN_FILL = 'rgba(255, 67, 58, 0.07)';
 
 function formatTime(ms: number): string {
   return new Date(ms).toLocaleTimeString('en-US', {
@@ -40,7 +40,6 @@ export function TickChart({ ticks }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<ChartJS | null>(null);
 
-  // Create chart once on mount
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -69,11 +68,12 @@ export function TickChart({ ticks }: Props) {
         plugins: {
           legend: { display: false },
           tooltip: {
-            backgroundColor: '#0f1117',
-            titleColor: '#64748b',
-            bodyColor: '#e2e8f0',
-            borderColor: '#1e2130',
+            backgroundColor: '#1e1e1e',
+            titleColor: 'rgba(255,255,255,0.35)',
+            bodyColor: '#ffffff',
+            borderColor: 'rgba(255,255,255,0.08)',
             borderWidth: 1,
+            padding: 10,
             callbacks: {
               label: (ctx) => ` $${Number(ctx.raw).toFixed(2)}`,
             },
@@ -83,22 +83,22 @@ export function TickChart({ ticks }: Props) {
           x: {
             display: true,
             ticks: {
-              color: '#334155',
+              color: 'rgba(255,255,255,0.2)',
               maxTicksLimit: 6,
-              font: { family: 'monospace', size: 10 },
+              font: { family: 'Inter, system-ui, sans-serif', size: 11 },
             },
-            grid: { color: '#0f1117' },
+            grid: { color: 'rgba(255,255,255,0.04)' },
             border: { display: false },
           },
           y: {
             display: true,
             position: 'right',
             ticks: {
-              color: '#334155',
-              font: { family: 'monospace', size: 11 },
+              color: 'rgba(255,255,255,0.2)',
+              font: { family: 'Inter, system-ui, sans-serif', size: 11 },
               callback: (v) => `$${Number(v).toFixed(2)}`,
             },
-            grid: { color: '#0f1117' },
+            grid: { color: 'rgba(255,255,255,0.04)' },
             border: { display: false },
           },
         },
@@ -111,8 +111,6 @@ export function TickChart({ ticks }: Props) {
     };
   }, []);
 
-  // Efficiently push new data into the existing chart instance — no re-instantiation,
-  // no animation overhead. update('none') skips easing entirely.
   useEffect(() => {
     const chart = chartRef.current;
     if (!chart || ticks.length === 0) return;
@@ -128,8 +126,8 @@ export function TickChart({ ticks }: Props) {
   return (
     <div className="relative w-full h-full">
       {ticks.length === 0 && (
-        <div className="absolute inset-0 flex items-center justify-center text-slate-700 text-xs font-mono tracking-widest">
-          AWAITING FEED
+        <div className="absolute inset-0 flex items-center justify-center text-white/15 text-[13px] tracking-wide">
+          Awaiting feed
         </div>
       )}
       <canvas ref={canvasRef} className="w-full h-full" />
