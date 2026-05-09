@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react';
 import {
   Chart as ChartJS,
+  LineController,
   CategoryScale,
   LinearScale,
   PointElement,
@@ -12,7 +13,7 @@ import {
 } from 'chart.js';
 import type { Tick } from '@/types/tick';
 
-ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Filler, Tooltip);
+ChartJS.register(LineController, CategoryScale, LinearScale, PointElement, LineElement, Filler, Tooltip);
 
 ChartJS.defaults.color = '#475569';
 ChartJS.defaults.borderColor = '#1e2130';
