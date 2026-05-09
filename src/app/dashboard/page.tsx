@@ -1,60 +1,325 @@
-"use client";
-import { useEffect, useState } from "react";
-import { io } from "socket.io-client";
-import StockHistoryChart from "@/components/charts/StockHistoryChart";
+'use client';
 
-export default function Dashboard() {
-  const [stocks, setStocks] = useState<{ [key: string]: number }>({});
-  const [selectedStock, setSelectedStock] = useState<string>("AAPL");
+import dynamic from 'next/dynamic';
+import { useEffect, useRef, useState } from 'react';
+import { useSocketContext } from '@/lib/SocketContext';
+import { useTicks } from '@/hooks/useTicks';
+import type { Tick } from '@/types/tick';
 
-  useEffect(() => {
-    const socket = io("http://localhost:4000");
+// Dynamic import prevents Chart.js from running during SSR
+const TickChart = dynamic(
+  () => import('@/components/charts/TickChart').then((m) => m.TickChart),
+  { ssr: false }
+);
 
-    socket.on("stock-update", (data) => {
-      setStocks(data);
-    });
+const DEFAULT_SYMBOLS = ['AAPL', 'TSLA', 'AMZN', 'NVDA', 'MSFT'];
 
-    return () => {
-      socket.disconnect();
-    };
-  }, []);
+// ─── Connection badge ────────────────────────────────────────────────────────
+
+function ConnectionBadge() {
+  const { connectionState, reconnectAttempt, isSimulated } = useSocketContext();
+
+  const config = {
+    connected: {
+      dot: 'bg-emerald-500',
+      label: isSimulated ? 'SIMULATED' : 'LIVE',
+      cls: isSimulated ? 'text-sky-400' : 'text-emerald-400',
+    },
+    connecting: {
+      dot: 'bg-slate-500 animate-pulse',
+      label: 'CONNECTING',
+      cls: 'text-slate-400',
+    },
+    reconnecting: {
+      dot: 'bg-amber-500 animate-pulse',
+      label: `RECONNECTING${reconnectAttempt > 0 ? ` (${reconnectAttempt})` : ''}`,
+      cls: 'text-amber-400',
+    },
+    disconnected: {
+      dot: 'bg-red-500',
+      label: 'DISCONNECTED',
+      cls: 'text-red-400',
+    },
+  }[connectionState];
 
   return (
-    <div className="p-8">
-      <h1 className="text-3xl mb-4 font-bold">Real-time Stocks</h1>
+    <div className="flex items-center gap-2">
+      <span className={`w-1.5 h-1.5 rounded-full ${config.dot}`} />
+      <span className={`text-xs font-mono tracking-widest ${config.cls}`}>{config.label}</span>
+    </div>
+  );
+}
 
-      <div className="mb-6">
-        <label className="block mb-2">Select Stock to Chart:</label>
-        <select
-          value={selectedStock}
-          onChange={(e) => setSelectedStock(e.target.value)}
-          className="bg-gray-800 border border-gray-700 rounded px-4 py-2"
-          style={{ color: "#10b981" }}
+// ─── SVG sparkline (no Chart.js — zero canvas overhead per card) ─────────────
+
+function Sparkline({ ticks, isUp }: { ticks: Tick[]; isUp: boolean }) {
+  if (ticks.length < 2) return <div className="h-8" />;
+
+  const prices = ticks.map((t) => t.price);
+  const min = Math.min(...prices);
+  const max = Math.max(...prices);
+  const range = max - min || 1;
+  const W = 100;
+  const H = 32;
+
+  const pts = prices
+    .map((p, i) => `${(i / (prices.length - 1)) * W},${H - ((p - min) / range) * H}`)
+    .join(' ');
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-8" preserveAspectRatio="none">
+      <polyline
+        points={pts}
+        fill="none"
+        stroke={isUp ? '#10b981' : '#ef4444'}
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+// ─── Watchlist card ──────────────────────────────────────────────────────────
+
+function SymbolCard({
+  symbol,
+  isSelected,
+  onSelect,
+  onRemove,
+}: {
+  symbol: string;
+  isSelected: boolean;
+  onSelect: () => void;
+  onRemove: () => void;
+}) {
+  const { ticks, latestPrice } = useTicks(symbol);
+
+  const sessionOpen = ticks.length > 0 ? ticks[0].price : null;
+  const change =
+    latestPrice !== null && sessionOpen !== null ? latestPrice - sessionOpen : null;
+  const changePct =
+    change !== null && sessionOpen ? (change / sessionOpen) * 100 : null;
+  const isUp = change === null ? true : change >= 0;
+
+  // Flash the price green/red on each tick, then fade back to neutral
+  const [priceClass, setPriceClass] = useState('text-slate-100');
+  const prevRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (latestPrice === null) return;
+    const prev = prevRef.current;
+    prevRef.current = latestPrice;
+    if (prev === null) return;
+    const cls = latestPrice >= prev ? 'text-emerald-300' : 'text-red-300';
+    setPriceClass(cls);
+    const t = setTimeout(() => setPriceClass('text-slate-100'), 350);
+    return () => clearTimeout(t);
+  }, [latestPrice]);
+
+  return (
+    <div
+      onClick={onSelect}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => e.key === 'Enter' && onSelect()}
+      className={`w-full text-left p-3 rounded-lg border transition-colors duration-100 cursor-pointer ${
+        isSelected
+          ? 'border-emerald-800/70 bg-emerald-950/30'
+          : 'border-slate-800/60 bg-slate-900/30 hover:border-slate-700/60'
+      }`}
+    >
+      <div className="flex justify-between items-center mb-0.5">
+        <span className="font-mono font-bold text-xs text-white tracking-widest">{symbol}</span>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onRemove();
+          }}
+          className="text-slate-700 hover:text-slate-400 text-sm leading-none px-0.5"
+          aria-label={`Remove ${symbol}`}
         >
-          {Object.keys(stocks).map((symbol) => (
-            <option key={symbol} value={symbol}>
-              {symbol}
-            </option>
-          ))}
-        </select>
+          ×
+        </button>
       </div>
 
-      <div className="mb-8 bg-gray-900 p-6 rounded-xl">
-        <h2 className="text-xl font-semibold mb-4" style={{ color: "#10b981" }}>
-          {selectedStock} Price History
-        </h2>
-        <StockHistoryChart symbol={selectedStock} />
+      <div className={`font-mono text-base font-semibold transition-colors duration-200 ${priceClass}`}>
+        {latestPrice !== null ? `$${latestPrice.toFixed(2)}` : '—'}
       </div>
 
-      <h2 className="text-xl font-semibold mb-4">Current Prices</h2>
-      <ul>
-        {Object.entries(stocks).map(([symbol, price]) => (
-          <li key={symbol} className="mb-2">
-            <span className="font-semibold">{symbol}: </span>
-            <span>{price}</span>
-          </li>
-        ))}
-      </ul>
+      {changePct !== null && (
+        <div className={`text-xs font-mono mt-0.5 ${isUp ? 'text-emerald-600' : 'text-red-600'}`}>
+          {isUp ? '+' : ''}
+          {changePct.toFixed(3)}%
+        </div>
+      )}
+
+      <div className="mt-2 opacity-70">
+        <Sparkline ticks={ticks} isUp={isUp} />
+      </div>
+    </div>
+  );
+}
+
+// ─── Detail panel ────────────────────────────────────────────────────────────
+
+function SymbolDetail({ symbol }: { symbol: string }) {
+  const { ticks, latestPrice, latestVolume } = useTicks(symbol);
+
+  const sessionOpen = ticks.length > 0 ? ticks[0].price : null;
+  const change =
+    latestPrice !== null && sessionOpen !== null ? latestPrice - sessionOpen : null;
+  const changePct =
+    change !== null && sessionOpen ? (change / sessionOpen) * 100 : null;
+  const isUp = change === null ? true : change >= 0;
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Price header */}
+      <div className="px-6 py-4 border-b border-slate-800/40 flex items-end gap-6 flex-shrink-0">
+        <div>
+          <p className="text-xs text-slate-600 font-mono tracking-[0.2em] mb-1">{symbol}</p>
+          <p
+            className={`font-mono text-4xl font-bold tabular-nums ${
+              isUp ? 'text-emerald-400' : 'text-red-400'
+            }`}
+          >
+            {latestPrice !== null ? `$${latestPrice.toFixed(2)}` : '—'}
+          </p>
+        </div>
+
+        {changePct !== null && (
+          <div className={`pb-1 ${isUp ? 'text-emerald-600' : 'text-red-600'}`}>
+            <p className="font-mono text-sm tabular-nums">
+              {isUp ? '+' : ''}
+              {change!.toFixed(4)}
+            </p>
+            <p className="font-mono text-sm tabular-nums">
+              {isUp ? '+' : ''}
+              {changePct.toFixed(4)}%
+            </p>
+          </div>
+        )}
+
+        <div className="ml-auto pb-1 flex gap-6">
+          {latestVolume !== null && (
+            <div>
+              <p className="text-xs text-slate-700 font-mono tracking-widest">VOL</p>
+              <p className="font-mono text-sm text-slate-500 tabular-nums">
+                {latestVolume.toLocaleString()}
+              </p>
+            </div>
+          )}
+          <div>
+            <p className="text-xs text-slate-700 font-mono tracking-widest">TICKS</p>
+            <p className="font-mono text-sm text-slate-500 tabular-nums">{ticks.length}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Chart */}
+      <div className="flex-1 p-4 min-h-0">
+        <TickChart ticks={ticks} />
+      </div>
+    </div>
+  );
+}
+
+// ─── Add-symbol form ─────────────────────────────────────────────────────────
+
+function AddSymbolForm({ onAdd }: { onAdd: (symbol: string) => void }) {
+  const [input, setInput] = useState('');
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const sym = input.trim().toUpperCase();
+    if (sym) {
+      onAdd(sym);
+      setInput('');
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="flex gap-1.5">
+      <input
+        value={input}
+        onChange={(e) => setInput(e.target.value.toUpperCase())}
+        placeholder="SYMBOL"
+        maxLength={10}
+        className="bg-slate-900/60 border border-slate-800 rounded px-3 py-1 text-xs font-mono text-slate-200 placeholder:text-slate-700 focus:outline-none focus:border-emerald-800 w-24"
+      />
+      <button
+        type="submit"
+        className="text-xs font-mono text-emerald-700 hover:text-emerald-400 border border-slate-800 hover:border-emerald-900 rounded px-2 py-1 transition-colors"
+      >
+        + ADD
+      </button>
+    </form>
+  );
+}
+
+// ─── Dashboard ───────────────────────────────────────────────────────────────
+
+export default function Dashboard() {
+  const [symbols, setSymbols] = useState<string[]>(DEFAULT_SYMBOLS);
+  const [selected, setSelected] = useState<string>(DEFAULT_SYMBOLS[0]);
+
+  const addSymbol = (sym: string) => {
+    setSymbols((prev) => (prev.includes(sym) ? prev : [...prev, sym]));
+    setSelected(sym);
+  };
+
+  const removeSymbol = (sym: string) => {
+    setSymbols((prev) => {
+      const next = prev.filter((s) => s !== sym);
+      if (selected === sym && next.length > 0) setSelected(next[0]);
+      return next;
+    });
+  };
+
+  return (
+    <div className="h-screen flex flex-col bg-[#080a10] text-slate-200 overflow-hidden">
+      {/* Header */}
+      <header className="flex items-center justify-between px-6 py-3 border-b border-slate-800/40 flex-shrink-0">
+        <div className="flex items-center gap-5">
+          <span className="font-mono font-bold text-white tracking-[0.4em] text-sm">KNOT</span>
+          <span className="text-slate-800">|</span>
+          <ConnectionBadge />
+        </div>
+        <AddSymbolForm onAdd={addSymbol} />
+      </header>
+
+      {/* Body */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Watchlist sidebar */}
+        <aside className="w-44 border-r border-slate-800/40 flex flex-col overflow-y-auto flex-shrink-0">
+          <p className="px-3 pt-3 pb-1.5 text-[10px] font-mono text-slate-700 tracking-widest">
+            WATCHLIST
+          </p>
+          <div className="px-2 pb-2 flex flex-col gap-1.5">
+            {symbols.map((sym) => (
+              <SymbolCard
+                key={sym}
+                symbol={sym}
+                isSelected={sym === selected}
+                onSelect={() => setSelected(sym)}
+                onRemove={() => removeSymbol(sym)}
+              />
+            ))}
+          </div>
+        </aside>
+
+        {/* Detail chart panel */}
+        <main className="flex-1 overflow-hidden">
+          {selected ? (
+            <SymbolDetail symbol={selected} />
+          ) : (
+            <div className="flex items-center justify-center h-full text-slate-700 text-xs font-mono tracking-widest">
+              SELECT A SYMBOL
+            </div>
+          )}
+        </main>
+      </div>
     </div>
   );
 }
