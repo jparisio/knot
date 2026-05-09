@@ -6,6 +6,24 @@ import express from 'express';
 import { createServer } from 'http';
 import { Server, Socket } from 'socket.io';
 import WebSocket from 'ws';
+import https from 'https';
+
+function fetchLastPrice(symbol: string): Promise<number | null> {
+  return new Promise((resolve) => {
+    const url = `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(symbol)}&token=${FINNHUB_TOKEN}`;
+    https.get(url, (res) => {
+      let raw = '';
+      res.on('data', (chunk) => { raw += chunk; });
+      res.on('end', () => {
+        try {
+          const { c, pc } = JSON.parse(raw);
+          // c = current/last price, pc = previous close — use whichever is non-zero
+          resolve((c && c > 0) ? c : (pc && pc > 0) ? pc : null);
+        } catch { resolve(null); }
+      });
+    }).on('error', () => resolve(null));
+  });
+}
 
 const app = express();
 const httpServer = createServer(app);
@@ -168,7 +186,7 @@ function stopSim(symbol: string): void {
 
 // ─── Sub management ──────────────────────────────────────────────────────────
 
-function addSub(symbol: string, socketId: string): void {
+async function addSub(symbol: string, socketId: string): Promise<void> {
   const isNew = !subscriptions.has(symbol);
   if (isNew) subscriptions.set(symbol, new Set());
   subscriptions.get(symbol)!.add(socketId);
@@ -176,11 +194,18 @@ function addSub(symbol: string, socketId: string): void {
   if (isNew) {
     fhSend({ type: 'subscribe', symbol });
 
+    // Seed sim price from Finnhub REST quote (real last/prev-close price)
+    if (!simPrices.has(symbol)) {
+      const fetched = await fetchLastPrice(symbol);
+      if (fetched !== null) console.log(`[finnhub] REST quote ${symbol}: $${fetched}`);
+      const seed = fetched ?? SIM_BASE_PRICES[symbol] ?? 100;
+      simPrices.set(symbol, seed);
+      console.log(`[sim] seeded ${symbol} @ $${seed}${fetched ? ' (REST)' : ' (fallback)'}`);
+    }
+
     if (!isMarketOpen()) {
-      // Market closed — start simulation immediately
       startSim(symbol);
     } else {
-      // Market open — wait briefly; start sim if Finnhub stays silent
       setTimeout(() => {
         const sinceReal = Date.now() - (lastRealTick.get(symbol) ?? 0);
         if (sinceReal > REAL_TICK_TIMEOUT_MS && subscriptions.has(symbol)) {
